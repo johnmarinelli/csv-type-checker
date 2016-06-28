@@ -4,6 +4,8 @@
             [clojure.data.json :as json])
   (:import [clojure.lang PersistentVector PersistentHashMap]))
 
+(def resource-path (str (System/getProperty "user.dir") "/resources/"))
+
 ; impure
 (defn read-csv [^String filename]
   (with-open [f (io/reader filename)]
@@ -13,16 +15,19 @@
   (let [contents (slurp filename)]
     (json/read-str contents)))
 
+(def row-number (atom 0)) 
 ; pure
-(defn try-catch [f & args] (try (apply f args) (catch Exception e (.getMessage e))))
+(comment(defn try-catch [f & args] (try (apply f args) (catch Exception e (.getMessage e)))))
 
 ; type => { constraints }
 (def types {"String" []
-            "Integer" [(fn [i] (try (Integer. i) (catch Exception e nil)))]})
+            "Integer" [(fn [i] (try (Integer. i) (catch Exception e nil)))]
+            "Float" [(fn [f] (try (Double. f) (catch Exception e nil)))]})
 
-(defmulti parse-field (fn [t v] (keyword t)))
-(defmethod parse-field :String [t v] v)
-(defmethod parse-field :Integer [t v] (Integer. v))
+(defmulti parse-field (fn [t _] (identity t)))
+(defmethod parse-field "String" [_ v] v)
+(defmethod parse-field "Integer" [_ v] (Integer. v))
+(defmethod parse-field "Float" [_ v] (Float. v))
 
 ; [ { :field_1 => 'field_1_val', :field_2 => 'field_2_val'... } {} {}...]
 (defn transform-csv [^PersistentVector csv]
@@ -40,13 +45,15 @@
       (println (str "Error found at row " row-number ".  Column: " field-name))
       (parse-field t value))))
    
-(def row-number (atom 1)) 
 ; `row` should be a transformed-csv row
 (defn validate-row [^PersistentHashMap input-types ^PersistentVector row] 
-  (map (fn [cell] (swap! row-number inc) (validate-cell @row-number input-types cell)) row))
+  (swap! row-number inc) 
+  (map (fn [cell] 
+         (validate-cell @row-number input-types cell)) row))
 
 ; Go through each row and validate the value of each cell
 (defn validate-csv [^PersistentHashMap input-types ^PersistentVector transformed-csv]
+  (swap! row-number (fn [_] 0))
   (map (partial validate-row input-types) transformed-csv))
 
 (defn -main [& args]
