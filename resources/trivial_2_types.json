@@ -1,1 +1,1 @@
-{"id":"Integer","name":"String","amount":"Float"}
+{"id":{"type":"Integer"},"name":{"type":"String"},"amount":{"type":"Float"},"created_at":{"type":"Timestamp","format":"YYYY-mm-dd"}}
