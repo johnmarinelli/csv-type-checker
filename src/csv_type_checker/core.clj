@@ -3,7 +3,8 @@
             [clojure.java.io :as io]
             [clojure.data.json :as json]
             [clj-time.core :as time]
-            [clj-time.format :as time-format])
+            [clj-time.format :as time-format]
+            [clojure.string :refer [trim]])
   (:import [clojure.lang PersistentVector PersistentHashMap]))
 
 (def resource-path (str (System/getProperty "user.dir") "/resources/"))
@@ -25,13 +26,15 @@
   (let [format (time-format/formatter input-fmt)]
     (time-format/parse format timestamp)))
 
+(def type-errors {:formatting-error "Format error."})
+
 ; type => { constraints }
 (def types {"String" []
-            "Integer" [(fn [i _] (try (Integer. i) (catch Exception e nil)))]
-            "Float" [(fn [f _] (try (Double. f) (catch Exception e nil)))]
-            "Timestamp" [(fn [timestamp metadata] 
+            "Integer" [(fn [i _] (try (Integer. i) (catch Exception e :formatting-error)))]
+            "Float" [(fn [f _] (try (Double. f) (catch Exception e :formatting-error)))]
+            "Timestamp" [(fn [timestamp metadata]
                            (try (create-timestamp (metadata "format") timestamp)
-                                (catch Exception e nil)))]})
+                                (catch Exception e :formatting-error)))]})
 
 (defmulti parse-field (fn [t _] (t "type")))
 (defmethod parse-field "String" [_ v] v)
@@ -51,13 +54,18 @@
   (let [field-name (first cell)
         metadata (input-types field-name)
         field-type (metadata "type")
-        value (second cell)
+        raw-value (second cell)
+        value (trim raw-value)
         constraints (types field-type)]
     (when (not (= "" value))
-      (let [validated (map #(% value metadata) constraints)]
-        (if (some nil? validated)
-          (println (str "Error found at row " row-number ".  Column: " field-name))
-          (parse-field metadata value))))))
+      (let [validated (map #(% value metadata) constraints)
+            a (println validated)
+            possible-type-errors (keys type-errors)
+            errors (clojure.set/intersection (set validated) (set possible-type-errors))]
+        (if (> (count errors) 0) ; if there are any type-error keys in possible-type-errors
+          (println (str "Error at row " row-number ", field " field-name))
+          (println (str "No errors for row " row-number ", field " field-name)))
+        validated))))
    
 ; `row` should be a transformed-csv row
 (defn validate-row [^PersistentHashMap input-types ^PersistentVector row] 
