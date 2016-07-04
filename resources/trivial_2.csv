@@ -1,8 +1,9 @@
 id,name,amount,created_at
 13,john,1.2,2016-01-02
-kate,2.4,2016-02-01
+,kate,2.4,2016-02-01
 1.0,joe,3.5,
 1,mary,6.4,
 4,jack,9.9,
 4.5,john,lol,2014-06-12
 5,he said "sup", 5.14,2014-05-11
+5,bill,31.41,2016-01-31
