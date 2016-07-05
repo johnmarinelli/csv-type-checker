@@ -11,10 +11,11 @@
 
 ; impure
 (def ^:dynamic *raw-csv-data* (atom nil))
+(defn update-raw-csv-data! [d]
+  (reset! *raw-csv-data* d))
+
 (defn get-column [^Long col-idx]
-  (let [
-        raw-csv-data (deref *raw-csv-data*)
-        
+  (let [raw-csv-data (deref *raw-csv-data*)
         rows (rest raw-csv-data)]
     (map #(nth % col-idx) rows)))
 
@@ -54,7 +55,7 @@
                                      colvals (get-column column-index)
                                      v (filter #(= % value) colvals)
                                      v-count (count v)
-                                     unique? (= v-count 1)]
+                                     unique? (<= v-count 1)]
                                  (if unique? value :uniqueness-error)))])
 
 (def existence-error-definitions {:existence-error "Existence error."})
@@ -67,6 +68,9 @@
                                   value)))])
 
 (def all-error-definitions (merge type-error-definitions uniqueness-error-definitions existence-error-definitions))
+(def error-filter (clojure.set/union (set type-errors) (set uniqueness-errors) (set existence-errors)))
+(defn error-sieve [validated] 
+  (clojure.set/intersection (set validated) error-filter))
 
 ; transforms tabular data into associative array.  requires first row to be headers.
 ; [ { :field_1 => 'field_1_val', :field_2 => 'field_2_val'... } {} {}...]
@@ -76,16 +80,14 @@
     (map #(apply array-map (interleave headers %)) rows)))
 
 (defn validate-cell [^Long row-number ^PersistentHashMap input-types cell]
-  (let [
-        field-name (first cell)
+  (let [field-name (first cell)
         metadata (input-types field-name)
         field-type (metadata "type")
         raw-value (second cell)
         value (trim raw-value)
         constraints (concat uniqueness-constraints existence-constraints (type-constraints field-type))]
     (let [validated (map #(% value metadata field-name) constraints)
-          filter (clojure.set/union (set type-errors) (set uniqueness-errors) (set existence-errors))
-          errors (clojure.set/intersection (set validated) filter)
+          errors (error-sieve validated)
           select-values (comp vals select-keys)
           error-keys (into [] errors)
           msgs (select-values all-error-definitions error-keys)]

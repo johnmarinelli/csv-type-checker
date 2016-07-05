@@ -19,13 +19,35 @@
 (deftest test-validate-cell
   (testing "Validating a valid cell against constraints depending on its value's type"
     (let [input-types {"int_field" {"type" "Integer"}, "string_field" {"type" "String"}}
-          cell ["int_field" "1"]
-          validated (validate-cell 1 input-types cell)]
-      (is (= validated '(1))))))
+          raw-csv-data '(["int_field" "string_field"] ["1" "john"] ["2" "kate"] ["3(" "joe"] ["4" "mary"] ["1" "jake"])
+          cell ["int_field" "2"]]
+      (update-raw-csv-data! raw-csv-data)
+      (let [validated (validate-cell 1 input-types cell)
+            errors (error-sieve validated)]
+        (is (= errors #{}))))))
 
 (deftest test-validate-bad-cell
   (testing "Validating an invalid cell against constraints depending on its value's type"
     (let [input-types {"int_field" {"type" "Integer"}, "string_field" {"type" "String"}}
           cell ["int_field" "1.0"]
-          validated (validate-cell 1 input-types cell)]
-      (is (= validated '(:formatting-error))))))
+          validated (validate-cell 1 input-types cell)
+          errors (error-sieve validated)]
+      (is (= errors #{:formatting-error})))))
+
+(deftest test-uniqueness-invalid
+  (testing "Validating the uniqueness of a given non-unique cell"
+    (let [input-types {"int_field" {"type" "Integer", "uniqueness" true}, "string_field" {"type" "String"}}
+          cell ["int_field" "1"]
+          validated (validate-cell 1 input-types cell)
+          errors (error-sieve validated)]
+      (is (= errors #{:uniqueness-error})))))
+
+(deftest test-existence-invalid
+  (testing "Validating the existence of a given nonexistent cell"
+    (let [input-types {"int_field" {"type" "Integer" "uniqueness" true "existence" true}, "string_field" {"type" "String"}}
+          raw-csv-data '(["int_field" "string_field"] ["1" "john"] ["2" "kate"] ["3(" "joe"] ["4" "mary"] ["1" "jake"])
+          cell ["int_field" ""]]
+      (update-raw-csv-data! raw-csv-data)
+      (let [validated (validate-cell 1 input-types cell)
+            errors (error-sieve validated)]
+        (is (= errors #{:existence-error :formatting-error}))))))
