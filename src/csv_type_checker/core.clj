@@ -1,36 +1,17 @@
 (ns csv-type-checker.core
-  (:require [clojure.data.csv :as csv]
-            [clojure.java.io :as io]
-            [clojure.data.json :as json]
-            [clj-time.core :as time]
+  (:require [clj-time.core :as time]
             [clj-time.format :as time-format]
-            [clojure.string :refer [trim lower-case]])
+            [clojure.string :refer [trim lower-case]]
+            [csv-type-checker.errors.type-errors :refer :all]
+            [csv-type-checker.errors.existence-errors :refer :all]
+            [csv-type-checker.errors.uniqueness-errors :refer :all]
+            [csv-type-checker.errors.all-errors :refer :all]
+            [csv-type-checker.impure :refer :all])
   (:import [clojure.lang PersistentVector PersistentHashMap]))
-
-(declare uniqueness-constraints existence-constraints type-constraints all-error-definitions error-sieve)
 
 (def resource-path (str (System/getProperty "user.dir") "/resources/"))
 
 ; impure
-(def ^:dynamic *raw-csv-data* (atom nil))
-(defn update-raw-csv-data! [d]
-  (reset! *raw-csv-data* d))
-
-(defn get-column [^Long col-idx]
-  (let [raw-csv-data (deref *raw-csv-data*)
-        rows (rest raw-csv-data)]
-    (map #(nth % col-idx) rows)))
-
-(defn read-csv [^String filename]
-  (with-open [f (io/reader filename)]
-    (doall (csv/read-csv f))))
-
-(defn read-json [^String filename]
-  (let [contents (slurp filename)]
-    (json/read-str contents)))
-
-(def row-number (atom 0)) 
-
 (defn validate-cell [^Long row-number ^PersistentHashMap input-types ^PersistentVector cell]
   (let [field-name (first cell)
         metadata (input-types field-name)
@@ -59,47 +40,7 @@
   (swap! row-number (fn [_] 0))
   (map (partial validate-row input-types) transformed-csv))
 
-(def uniqueness-error-definitions {:uniqueness-error "Uniqueness error."})
-(def uniqueness-errors (keys uniqueness-error-definitions))
-
-(def uniqueness-constraints [(fn [value metadata field-name]
-                               (let [headers (first (deref *raw-csv-data*))
-                                     column-index (.indexOf headers field-name)
-                                     colvals (get-column column-index)
-                                     v (filter #(= % value) colvals)
-                                     v-count (count v)
-                                     unique? (<= v-count 1)]
-                                 (if unique? value :uniqueness-error)))])
-
 ; pure
-(defn create-timestamp [input-fmt timestamp]
-  (let [format (time-format/formatter input-fmt)]
-    (time-format/parse format timestamp)))
-
-(def type-error-definitions {:formatting-error "Format error."})
-(def type-errors (keys type-error-definitions))
-
-; type => { constraints }
-(def type-constraints { "String" []
-                        "Integer" [(fn [i _ _] (try (Integer. i) (catch Exception e :formatting-error)))]
-                        "Float" [(fn [f _ _] (try (Double. f) (catch Exception e :formatting-error)))]
-                        "Timestamp" [(fn [timestamp metadata _]
-                                       (try (create-timestamp (metadata "format") timestamp)
-                                            (catch Exception e :formatting-error)))]})
-
-(def existence-error-definitions {:existence-error "Existence error."})
-(def existence-errors (keys existence-error-definitions))
-
-(def existence-constraints [(fn [value metadata field-name]
-                              (let [check-for-existence? (boolean (Boolean/valueOf (metadata "existence")))]
-                                (if (and check-for-existence? (= value "")) 
-                                  :existence-error
-                                  value)))])
-
-(def all-error-definitions (merge type-error-definitions uniqueness-error-definitions existence-error-definitions))
-(def error-filter (clojure.set/union (set type-errors) (set uniqueness-errors) (set existence-errors)))
-(defn error-sieve [validated] 
-  (clojure.set/intersection (set validated) error-filter))
 
 ; transforms tabular data into associative array.  requires first row to be headers.
 ; [ { :field_1 => 'field_1_val', :field_2 => 'field_2_val'... } {} {}...]
@@ -112,4 +53,4 @@
 (defn -main [& args]
   (let [csv-filename (first args)
         types-filename (second args)]
-    (-> csv-filename read-csv transform-csv (validate-csv (read-json types-filename)))))
+    (-> csv-filename read-csv update-raw-csv-data! transform-csv (validate-csv (read-json types-filename)))))
