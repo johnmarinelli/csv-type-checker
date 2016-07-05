@@ -7,6 +7,8 @@
             [clojure.string :refer [trim lower-case]])
   (:import [clojure.lang PersistentVector PersistentHashMap]))
 
+(declare uniqueness-constraints existence-constraints type-constraints all-error-definitions error-sieve)
+
 (def resource-path (str (System/getProperty "user.dir") "/resources/"))
 
 ; impure
@@ -28,9 +30,48 @@
     (json/read-str contents)))
 
 (def row-number (atom 0)) 
-; pure
-(comment(defn try-catch [f & args] (try (apply f args) (catch Exception e (.getMessage e)))))
 
+(defn validate-cell [^Long row-number ^PersistentHashMap input-types ^PersistentVector cell]
+  (let [field-name (first cell)
+        metadata (input-types field-name)
+        field-type (metadata "type")
+        raw-value (second cell)
+        value (trim raw-value)
+        all-constraints (concat uniqueness-constraints existence-constraints (type-constraints field-type))]
+    (let [validated (map #(% value metadata field-name) all-constraints)
+          errors (error-sieve validated)
+          select-values (comp vals select-keys)
+          error-keys (into [] errors)
+          msgs (select-values all-error-definitions error-keys)]
+      (if (> (count errors) 0) ; if there are any type-error keys in possible-type-errors
+        (println (str "Error at row " row-number ", field " field-name ": " msgs))
+        (println (str "No errors for row " row-number ", field " field-name)))
+      validated)))
+   
+; `row` should be a transformed-csv row
+(defn validate-row [^PersistentHashMap input-types ^PersistentVector row] 
+  (swap! row-number inc) 
+  (map (fn [cell] 
+         (validate-cell @row-number input-types cell)) row))
+
+; Go through each row and validate the value of each cell
+(defn validate-csv [^PersistentHashMap input-types ^PersistentVector transformed-csv]
+  (swap! row-number (fn [_] 0))
+  (map (partial validate-row input-types) transformed-csv))
+
+(def uniqueness-error-definitions {:uniqueness-error "Uniqueness error."})
+(def uniqueness-errors (keys uniqueness-error-definitions))
+
+(def uniqueness-constraints [(fn [value metadata field-name]
+                               (let [headers (first (deref *raw-csv-data*))
+                                     column-index (.indexOf headers field-name)
+                                     colvals (get-column column-index)
+                                     v (filter #(= % value) colvals)
+                                     v-count (count v)
+                                     unique? (<= v-count 1)]
+                                 (if unique? value :uniqueness-error)))])
+
+; pure
 (defn create-timestamp [input-fmt timestamp]
   (let [format (time-format/formatter input-fmt)]
     (time-format/parse format timestamp)))
@@ -45,18 +86,6 @@
                         "Timestamp" [(fn [timestamp metadata _]
                                        (try (create-timestamp (metadata "format") timestamp)
                                             (catch Exception e :formatting-error)))]})
-
-(def uniqueness-error-definitions {:uniqueness-error "Uniqueness error."})
-(def uniqueness-errors (keys uniqueness-error-definitions))
-
-(def uniqueness-constraints [(fn [value metadata field-name]
-                               (let [headers (first (deref *raw-csv-data*))
-                                     column-index (.indexOf headers field-name)
-                                     colvals (get-column column-index)
-                                     v (filter #(= % value) colvals)
-                                     v-count (count v)
-                                     unique? (<= v-count 1)]
-                                 (if unique? value :uniqueness-error)))])
 
 (def existence-error-definitions {:existence-error "Existence error."})
 (def existence-errors (keys existence-error-definitions))
@@ -79,34 +108,7 @@
         rows (rest csv)] 
     (map #(apply array-map (interleave headers %)) rows)))
 
-(defn validate-cell [^Long row-number ^PersistentHashMap input-types cell]
-  (let [field-name (first cell)
-        metadata (input-types field-name)
-        field-type (metadata "type")
-        raw-value (second cell)
-        value (trim raw-value)
-        constraints (concat uniqueness-constraints existence-constraints (type-constraints field-type))]
-    (let [validated (map #(% value metadata field-name) constraints)
-          errors (error-sieve validated)
-          select-values (comp vals select-keys)
-          error-keys (into [] errors)
-          msgs (select-values all-error-definitions error-keys)]
-      (if (> (count errors) 0) ; if there are any type-error keys in possible-type-errors
-        (println (str "Error at row " row-number ", field " field-name ": " msgs))
-        (println (str "No errors for row " row-number ", field " field-name)))
-      validated)))
-   
-; `row` should be a transformed-csv row
-(defn validate-row [^PersistentHashMap input-types ^PersistentVector row] 
-  (swap! row-number inc) 
-  (map (fn [cell] 
-         (validate-cell @row-number input-types cell)) row))
-
-; Go through each row and validate the value of each cell
-(defn validate-csv [^PersistentHashMap input-types ^PersistentVector transformed-csv]
-  (swap! row-number (fn [_] 0))
-  (map (partial validate-row input-types) transformed-csv))
-
+; entry 
 (defn -main [& args]
   (let [csv-filename (first args)
         types-filename (second args)]
