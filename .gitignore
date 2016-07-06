@@ -10,3 +10,4 @@ pom.xml.asc
 .hgignore
 .hg/
 /resources/report_1467.csv
+/resources/campaigns.csv

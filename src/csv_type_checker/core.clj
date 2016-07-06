@@ -18,15 +18,18 @@
         field-type (metadata "type")
         raw-value (second cell)
         value (trim raw-value)
-        all-constraints (concat uniqueness-constraints existence-constraints (type-constraints field-type))]
-    (let [validated (map #(% value metadata field-name) all-constraints)
+        all-constraints (concat existence-constraints uniqueness-constraints (type-constraints field-type))]
+    (let [first-error (some error-filter (map #(% value metadata field-name) all-constraints)) ; returns the first error found.  this makes errors have priority
+          msg (all-error-definitions first-error)
+          validated (map #(% value metadata field-name) all-constraints)
           errors (error-sieve validated)
           select-values (comp vals select-keys)
           error-keys (into [] errors)
           msgs (select-values all-error-definitions error-keys)]
       (if (> (count errors) 0) ; if there are any type-error keys in possible-type-errors
-        (println (str "Error at row " row-number ", field " field-name ": " msgs))
-        (println (str "No errors for row " row-number ", field " field-name)))
+        (println (str "Error at row " row-number ", field " field-name ": " msg))
+        ;(println (str "No errors for row " row-number ", field " field-name))
+        identity)
       validated)))
    
 ; `row` should be a transformed-csv row
