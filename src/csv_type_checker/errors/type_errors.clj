@@ -6,8 +6,8 @@
 
 ; type => { constraints }
 (def type-constraints { "String" []
-                        "Integer" [(fn [i _ _] (try (Integer. i) (catch Exception e :formatting-error)))]
-                        "Float" [(fn [f _ _] (try (Double. f) (catch Exception e :formatting-error)))]
+                        "Integer" [(fn [i _ _] (when (not (= i "")) (try (Integer. i) (catch Exception e :formatting-error))))]
+                        "Float" [(fn [f _ _] (when (not (= f "")) (try (Double. f) (catch Exception e :formatting-error))))]
                         "Timestamp" [(fn [timestamp metadata _]
-                                       (try (common/create-timestamp (metadata "format") timestamp)
-                                            (catch Exception e :formatting-error)))]})
+                                       (when (not (= timestamp "")) (try (common/create-timestamp (metadata "format") timestamp)
+                                                     (catch Exception e :formatting-error))))]})
