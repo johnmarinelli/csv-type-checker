@@ -40,7 +40,23 @@
           cell ["int_field" ""]]
       (let [validated (validate-cell 1 input-types cell)
             errors (error-sieve validated)]
-        (is (= errors #{:existence-error :formatting-error}))))))
+        (is (= errors #{:existence-error}))))))
+
+(deftest test-json-invalid
+  (testing "Validating the json format of a cell with improperly formed JSON string content"
+    (let [input-types {"json_field" {"type" "JSON"}}
+          cell ["json_field" "invalid-json"]]
+      (let [validated (validate-cell 1 input-types cell)
+            errors (error-sieve validated)]
+        (is (= errors #{:invalid-json-error}))))))
+
+(deftest test-max-length-invalid
+  (testing "Validating the length of a cell with a string that is too long"
+    (let [input-types {"string_field" {"type" "String" "max" 5}}
+          cell ["string_field" "hello world"]]
+      (let [validated (validate-cell 1 input-types cell)
+            errors (error-sieve validated)]
+        (is (= errors #{:string-too-long-error}))))))
 
 (deftest test-cell-validation
   (testing "Validating cells.  Requires csv-type-checker.impure/*raw-csv-data* to be populated."
@@ -49,7 +65,9 @@
       (test-validate-valid-cell)
       (test-validate-bad-cell)
       (test-uniqueness-invalid)
-      (test-existence-invalid))))
+      (test-existence-invalid)
+      (test-json-invalid)
+      (test-max-length-invalid))))
 
 (defn test-ns-hook [] 
   (test-transform-csv)
