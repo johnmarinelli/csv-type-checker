@@ -42,6 +42,14 @@
             errors (error-sieve validated)]
         (is (= errors #{:existence-error}))))))
 
+(deftest test-existence-valid
+  (testing "Validating the existence of a given nonexistent cell"
+    (let [input-types {"int_field" {"type" "Integer" "existence" true}}
+          cell ["int_field" "1"]]
+      (let [validated (validate-cell 1 input-types cell)
+            errors (error-sieve validated)]
+        (is (= errors #{}))))))
+
 (deftest test-json-invalid
   (testing "Validating the json format of a cell with improperly formed JSON string content"
     (let [input-types {"json_field" {"type" "JSON"}}
@@ -49,6 +57,14 @@
       (let [validated (validate-cell 1 input-types cell)
             errors (error-sieve validated)]
         (is (= errors #{:invalid-json-error}))))))
+
+(deftest test-json-valid
+  (testing "Validating the json format of a cell with improperly formed JSON string content"
+    (let [input-types {"json_field" {"type" "JSON"}}
+          cell ["json_field" "{}"]]
+      (let [validated (validate-cell 1 input-types cell)
+            errors (error-sieve validated)]
+        (is (= errors #{}))))))
 
 (deftest test-max-length-invalid
   (testing "Validating the length of a cell with a string that is too long"
@@ -58,6 +74,23 @@
             errors (error-sieve validated)]
         (is (= errors #{:string-too-long-error}))))))
 
+(deftest test-max-length-valid
+  (testing "Validating the length of a cell with a string that is too long"
+    (let [input-types {"string_field" {"type" "String" "max" 100}}
+          cell ["string_field" "hello world"]]
+      (let [validated (validate-cell 1 input-types cell)
+            errors (error-sieve validated)]
+        (is (= errors #{}))))))
+
+(deftest test-email-format-invalid
+  (testing "Validating the format of an invalid email"
+    (let [input-types {"email_field" {"type" "Email"}}
+          cell ["email_field" "not-an-email"]]
+      (let [validated (validate-cell 1 input-types cell)
+            errors (error-sieve validated)]
+        (is (= errors #{:formatting-error}))))))
+
+
 (deftest test-cell-validation
   (testing "Validating cells.  Requires csv-type-checker.impure/*raw-csv-data* to be populated."
     (let [raw-csv-data '(["int_field" "string_field"] ["1" "john"] ["2" "kate"] ["3(" "joe"] ["4" "mary"] ["1" "jake"])]
@@ -66,8 +99,12 @@
       (test-validate-bad-cell)
       (test-uniqueness-invalid)
       (test-existence-invalid)
+      (test-existence-valid)
       (test-json-invalid)
-      (test-max-length-invalid))))
+      (test-json-valid)
+      (test-max-length-invalid)
+      (test-max-length-valid)
+      (test-email-format-invalid))))
 
 (defn test-ns-hook [] 
   (test-transform-csv)

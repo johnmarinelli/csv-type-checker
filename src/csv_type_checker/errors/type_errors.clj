@@ -7,11 +7,13 @@
                              :string-too-long-error "String is too long."})
 (def type-errors (keys type-error-definitions))
 
+; field-name parameter is empty because type error class has no use for it
+(def if-not-empty [val metadata fn]
+  (when (not = val "") (fn val metadata nil))) 
+
 ; type => { constraints }
 (def type-constraints { "String" [(fn [str metadata _]
-                                    (let [check-for-length? (contains? metadata "max")
-                                          a (println (count str))
-                                          b (println (Integer. (metadata "max")))]
+                                    (let [check-for-length? (contains? metadata "max")]
                                       (if check-for-length?
                                         (if (> (count str) (Integer. (metadata "max")))
                                           :string-too-long-error
@@ -25,4 +27,9 @@
                         "JSON" [(fn [json-str metadata _]
                                   (when (not (= json-str "")) 
                                     (try (json/read-str json-str)
-                                         (catch Exception e :invalid-json-error))))]})
+                                         (catch Exception e :invalid-json-error))))]
+                        "Email" [(fn [text metadata _]
+                                   (when (not (= text ""))
+                                     (let [match (re-matches #"[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?" text)]
+                                       (if match text :formatting-error))))]})
+
